@@ -2,8 +2,12 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -82,13 +86,71 @@ func (h *Handler) handleGetTests(w http.ResponseWriter, r *http.Request) {
 
 // handleCreateTest creates a new test run from the request body.
 func (h *Handler) handleCreateTest(w http.ResponseWriter, r *http.Request) {
-	var testRun store.TestRun
-	if err := json.NewDecoder(r.Body).Decode(&testRun); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+	// Parse multipart form (for file upload)
+	err := r.ParseMultipartForm(10 << 20) // 10 MB limit
+	if err != nil {
+		http.Error(w, "Unable to parse form", http.StatusBadRequest)
 		return
 	}
+
+	var testRun store.TestRun
+	// Get form values
+	testRun.Name = r.FormValue("testName")
+	// TODO: Validate required fields
+
 	// Set initial status to QUEUED
 	testRun.Status = "QUEUED"
+
+	// Handle file upload for proto schema
+	if file, handler, err := r.FormFile("protoSchema"); err == nil {
+		defer file.Close()
+		// Create directory if it doesn't exist
+		if err := os.MkdirAll("./proto_schemas", 0o755); err != nil {
+			http.Error(w, "Unable to create directory for proto schemas", http.StatusInternalServerError)
+			return
+		}
+		// Save the file
+		filePath := filepath.Join("./proto_schemas", handler.Filename)
+		dst, err := os.Create(filePath)
+		if err != nil {
+			http.Error(w, "Unable to save file", http.StatusInternalServerError)
+			return
+		}
+		defer dst.Close()
+		if _, err := io.Copy(dst, file); err != nil {
+			http.Error(w, "Unable to save file", http.StatusInternalServerError)
+			return
+		}
+		testRun.ProtoSchemaPath = filePath
+	} else if err != http.ErrMissingParam {
+		// If there was an error that's not about a missing parameter
+		http.Error(w, "Error processing file upload", http.StatusBadRequest)
+		return
+	}
+
+	// Get message type
+	testRun.MessageType = r.FormValue("messageType")
+
+	// Build config JSON from form data
+	config := map[string]interface{}{
+		"endpoint":        r.FormValue("wsEndpoint"),
+		"connections":     r.FormValue("virtualUsers"),
+		"messagesPerSecond": r.FormValue("messagesPerSecond"),
+		"duration":        r.FormValue("duration"),
+		"payload":         r.FormValue("payload"),
+		"authToken":       r.FormValue("authToken"),
+		"headers":         r.FormValue("headers"),
+		"eventType":       r.FormValue("eventType"),
+		"protoSchemaPath": testRun.ProtoSchemaPath,
+		"messageType":     testRun.MessageType,
+	}
+	configJSON, err := json.Marshal(config)
+	if err != nil {
+		http.Error(w, "Unable to create test configuration", http.StatusInternalServerError)
+		return
+	}
+	testRun.ConfigJSON = configJSON
+
 	if err := h.store.CreateTestRun(&testRun); err != nil {
 		http.Error(w, "failed to create test", http.StatusInternalServerError)
 		return
@@ -120,6 +182,148 @@ func (h *Handler) handleStartTest(w http.ResponseWriter, r *http.Request, id str
 			http.Error(w, "test not found", http.StatusNotFound)
 			return
 		}
+		http.Error(w, "failed to get test", http.StatusInternalServerError)
+		return
+	}
+	if testRun.Status != "QUEUED" {
+		http.Error(w, "test cannot be started (not in QUEUED state)", http.StatusBadRequest)
+		return
+	}
+
+	// Update status to RUNNING
+	testRun.Status = "RUNNING"
+	testRun.StartedAt = time.Now()
+	if err := h.store.UpdateTestRun(testRun); err != nil {
+		http.Error(w, "failed to start test", http.StatusInternalServerError)
+		return
+	}
+
+	// Parse the test configuration to create a load runner config
+	var configMap map[string]interface{}
+	if err := json.Unmarshal(testRun.ConfigJSON, &configMap); err != nil {
+		http.Error(w, "invalid test configuration", http.StatusBadRequest)
+		return
+	}
+
+	// Extract configuration values with defaults
+	endpoint := "ws://localhost:8080/ws" // default
+	if v, ok := configMap["endpoint"]; ok {
+		if s, ok := v.(string); ok {
+			endpoint = s
+		}
+	}
+
+	connections := 100 // default
+	if v, ok := configMap["connections"]; ok {
+		if f, ok := v.(float64); ok {
+			connections = int(f)
+		}
+	}
+
+	messagesPerSecond := 1000 // default
+	if v, ok := configMap["messagesPerSecond"]; ok {
+		if f, ok := v.(float64); ok {
+			messagesPerSecond = int(f)
+		}
+	}
+
+	durationStr := "30s" // default
+	if v, ok := configMap["duration"]; ok {
+		if s, ok := v.(string); ok {
+			durationStr = s
+		}
+	}
+	duration, err := time.ParseDuration(durationStr)
+	if err != nil {
+		duration = 30 * time.Second
+	}
+
+	payload := []byte(`{"event":"PLAYER_MOVE"}`) // default payload
+	if v, ok := configMap["payload"]; ok {
+		if p, ok := v.(map[string]interface{}); ok {
+			// Simple JSON payload for now
+			payloadBytes, _ := json.Marshal(p)
+			payload = payloadBytes
+		} else if s, ok := v.(string); ok {
+			payload = []byte(s)
+		}
+	}
+
+	authToken := "" // default
+	if v, ok := configMap["authToken"]; ok {
+		if s, ok := v.(string); ok {
+			authToken = s
+		}
+	}
+
+	// Create headers
+	headers := make(http.Header)
+	if v, ok := configMap["headers"]; ok {
+		if hMap, ok := v.(map[string]interface{}); ok {
+			for k, v := range hMap {
+				if s, ok := v.(string); ok {
+					headers.Add(k, s)
+				}
+			}
+		}
+	}
+
+	// Get protobuf schema info
+	protoSchemaPath := ""
+	if v, ok := configMap["protoSchemaPath"]; ok {
+		if s, ok := v.(string); ok {
+			protoSchemaPath = s
+		}
+	}
+
+	messageType := ""
+	if v, ok := configMap["messageType"]; ok {
+		if s, ok := v.(string); ok {
+			messageType = s
+		}
+	}
+
+	// Create and start the load runner in a goroutine
+	lrConfig := runner.LoadRunnerConfig{
+		Endpoint:        endpoint,
+		Connections:     connections,
+		MessagesPerSec:  messagesPerSecond,
+		Duration:        duration,
+		Payload:         payload,
+		AuthToken:       authToken,
+		Headers:         headers,
+		ProtoSchemaPath: protoSchemaPath,
+		MessageType:     messageType,
+	}
+
+	go func() {
+		lr := runner.NewLoadRunner(lrConfig)
+		lr.Run()
+
+		// Update test run with results
+		h.mu.Lock()
+		defer h.mu.Unlock()
+
+		// Get the test run again to ensure we have the latest
+		updatedTestRun, err := h.store.GetTestRun(id)
+		if err != nil {
+			log.Printf("Error getting test run %s after test completion: %v", id, err)
+			return
+		}
+
+		// Update with results (in a real implementation, we'd store metrics separately)
+		updatedTestRun.Status = "COMPLETED"
+		updatedTestRun.CompletedAt = time.Now()
+		// We could store the result in a field or generate a report here
+		if err := h.store.UpdateTestRun(updatedTestRun); err != nil {
+			log.Printf("Error updating test run %s with results: %v", id, err)
+		}
+	}()
+
+	// Return the updated test run immediately
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(testRun)
+}
 		http.Error(w, "failed to get test", http.StatusInternalServerError)
 		return
 	}

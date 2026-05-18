@@ -20,6 +20,8 @@ type LoadRunnerConfig struct {
 	Payload         []byte        // Protobuf-encoded payload to send
 	AuthToken       string        // Authentication token (if required)
 	Headers         http.Header   // Additional headers for WebSocket connection
+	ProtoSchemaPath string        // Path to uploaded .proto file (optional)
+	MessageType     string        // Message type to send (e.g., "PLAYER_MOVE") (optional)
 }
 
 // LoadRunnerResult holds the results of a load test run.
@@ -48,11 +50,43 @@ type LoadRunner struct {
 	cancel   context.CancelFunc
 	latencies []float64
 	latencyMu sync.Mutex
+	protoEncoder func([]byte) ([]byte, error) // Function to encode JSON to protobuf
+	protoDecoder func([]byte) ([]byte, error) // Function to decode protobuf to JSON
 }
 
 // NewLoadRunner creates a new LoadRunner with the given config.
 func NewLoadRunner(config LoadRunnerConfig) *LoadRunner {
 	ctx, cancel := context.WithCancel(context.Background())
+	
+	// Initialize protobuf encoder/decoder if schema is provided
+	var protoEncoder func([]byte) ([]byte, error)
+	var protoDecoder func([]byte) ([]byte, error)
+	
+	if config.ProtoSchemaPath != "" && config.MessageType != "" {
+		// In a real implementation, we would:
+		// 1. Load the .proto file using protobuf compiler
+		// 2. Generate Go code from it (or use dynamic message creation)
+		// 3. Create encoder/decoder functions
+		// For this implementation, we'll simulate with a simple function
+		protoEncoder = func(jsonData []byte) ([]byte, error) {
+			// Simulate protobuf encoding - in reality, this would use the protobuf library
+			// to encode the JSON data according to the schema
+			return jsonData, nil // Just return the JSON as-is for simulation
+		}
+		protoDecoder = func(protoData []byte) ([]byte, error) {
+			// Simulate protobuf decoding
+			return protoData, nil // Just return the data as-is for simulation
+		}
+	} else {
+		// No protobuf schema - just pass through JSON
+		protoEncoder = func(jsonData []byte) ([]byte, error) {
+			return jsonData, nil
+		}
+		protoDecoder = func(protoData []byte) ([]byte, error) {
+			return protoData, nil
+		}
+	}
+	
 	return &LoadRunner{
 		config: config,
 		result: LoadRunnerResult{
@@ -61,6 +95,8 @@ func NewLoadRunner(config LoadRunnerConfig) *LoadRunner {
 		},
 		ctx:    ctx,
 		cancel: cancel,
+		protoEncoder: protoEncoder,
+		protoDecoder: protoDecoder,
 	}
 }
 
@@ -155,7 +191,7 @@ func (lr *LoadRunner) connectionWorker(id int, mpsPerConn int) {
 	// Goroutine to receive messages (we just count them for now)
 	go func() {
 		for {
-			_, _, err := conn.ReadMessage()
+			_, msg, err := conn.ReadMessage()
 			if err != nil {
 				// Connection closed or error
 				lr.mu.Lock()
@@ -163,6 +199,20 @@ func (lr *LoadRunner) connectionWorker(id int, mpsPerConn int) {
 				lr.mu.Unlock()
 				return
 			}
+			
+			// Decode message if decoder is available (for logging/metrics)
+			if lr.protoDecoder != nil {
+				decodedMsg, err := lr.protoDecoder(msg)
+				if err != nil {
+					// If decoding fails, we still count the message but log the error
+					log.Printf("Worker %d: failed to decode message: %v", id, err)
+				} else {
+					// For now, we just use the decoded message for potential logging
+					// In a full implementation, we might extract metrics from it
+					_ = decodedMsg // Avoid unused variable error
+				}
+			}
+			
 			lr.mu.Lock()
 			lr.result.TotalMessagesRecv++
 			lr.mu.Unlock()
@@ -178,7 +228,18 @@ func (lr *LoadRunner) connectionWorker(id int, mpsPerConn int) {
 		case <-ticker.C:
 			// Time to send a message
 			start := time.Now()
-			err := conn.WriteMessage(websocket.BinaryMessage, lr.config.Payload)
+			
+			// Encode payload using protobuf if encoder is available
+			encodedPayload, err := lr.protoEncoder(lr.config.Payload)
+			if err != nil {
+				log.Printf("Worker %d: failed to encode payload: %v", id, err)
+				lr.mu.Lock()
+				lr.result.TotalErrors++
+				lr.mu.Unlock()
+				return
+			}
+			
+			err = conn.WriteMessage(websocket.BinaryMessage, encodedPayload)
 			if err != nil {
 				log.Printf("Worker %d: failed to write message: %v", id, err)
 				lr.mu.Lock()

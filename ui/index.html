@@ -230,6 +230,12 @@
                 </div>
                 
                 <div class="form-group">
+                    <label for="messageType">Message Type</label>
+                    <input type="text" id="messageType" name="messageType" value="PLAYER_MOVE">
+                    <small>The protobuf message type to send (e.g., package.MessageType)</small>
+                </div>
+                
+                <div class="form-group">
                     <label for="payload">Payload (JSON)</label>
                     <textarea id="payload" name="payload">{"event":"PLAYER_MOVE","x":100,"y":200}</textarea>
                 </div>

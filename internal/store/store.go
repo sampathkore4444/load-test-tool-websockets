@@ -21,6 +21,9 @@ type TestRun struct {
 	ConfigJSON   []byte    `json:"config_json"` // Raw JSON of the test configuration
 	ReportPath   string    `json:"report_path,omitempty"`
 	ErrorMessage string    `json:"error_message,omitempty"`
+	// Protobuf schema handling
+	ProtoSchemaPath string `json:"proto_schema_path,omitempty"` // Path to uploaded .proto file
+	MessageType     string `json:"message_type,omitempty"`      // Message type to send (e.g., "PLAYER_MOVE")
 }
 
 // TestStore defines the interface for storing test runs.
