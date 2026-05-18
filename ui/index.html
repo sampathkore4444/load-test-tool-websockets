@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Load Test Tool</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .tab-container {
+            display: flex;
+            border-bottom: 1px solid #ddd;
+            margin-bottom: 20px;
+        }
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 16px;
+            outline: none;
+        }
+        .tab.active {
+            border-bottom: 2px solid #007bff;
+            color: #007bff;
+            font-weight: bold;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .btn-secondary {
+            background-color: #6c757d;
+        }
+        .btn-secondary:hover {
+            background-color: #545b62;
+        }
+        .btn-danger {
+            background-color: #dc3545;
+        }
+        .btn-danger:hover {
+            background-color: #c82333;
+        }
+        .btn-success {
+            background-color: #28a745;
+        }
+        .btn-success:hover {
+            background-color: #1e7e34;
+        }
+        .test-list {
+            margin-top: 20px;
+        }
+        .test-item {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 10px;
+            background-color: #fafafa;
+        }
+        .test-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .test-item-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+        }
+        .test-item-status {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .status-queued { background-color: #fff3cd; color: #856404; }
+        .status-running { background-color: #d4edda; color: #155724; }
+        .status-completed { background-color: #d1ecf1; color: #0c5460; }
+        .status-failed { background-color: #f8d7da; color: #721c24; }
+        .status-cancelled { background-color: #e2e3e5; color: #383d41; }
+        .test-item-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 10px;
+            font-size: 14px;
+            color: #666;
+        }
+        .test-item-detail {
+            display: flex;
+            align-items: center;
+        }
+        .test-item-detail-label {
+            font-weight: bold;
+            min-width: 80px;
+        }
+        .test-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .live-metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .metric-card {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            background-color: #fafafa;
+        }
+        .metric-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #007bff;
+            margin: 10px 0;
+        }
+        .metric-label {
+            font-size: 14px;
+            color: #666;
+            text-transform: uppercase;
+        }
+        .report-link {
+            display: inline-block;
+            margin-top: 10px;
+            padding: 8px 16px;
+            background-color: #28a745;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+        }
+        .report-link:hover {
+            background-color: #1e7e34;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Load Test Tool</h1>
+        
+        <div class="tab-container">
+            <button class="tab active" data-tab="create">Create Test</button>
+            <button class="tab" data-tab="dashboard">Dashboard</button>
+            <button class="tab" data-tab="reports">Reports</button>
+        </div>
+        
+        <div id="create-tab" class="tab-content active">
+            <h2>Create New Test</h2>
+            <form id="testForm">
+                <div class="form-group">
+                    <label for="testName">Test Name</label>
+                    <input type="text" id="testName" name="testName" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="wsEndpoint">WebSocket Endpoint</label>
+                    <input type="text" id="wsEndpoint" name="wsEndpoint" value="ws://localhost:8080/ws" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="authToken">Authentication Token</label>
+                    <input type="text" id="authToken" name="authToken" value="test-token">
+                </div>
+                
+                <div class="form-group">
+                    <label for="eventType">Event Type</label>
+                    <input type="text" id="eventType" name="eventType" value="PLAYER_MOVE">
+                </div>
+                
+                <div class="form-group">
+                    <label for="protoSchema">Proto Schema Upload</label>
+                    <input type="file" id="protoSchema" name="protoSchema" accept=".proto">
+                    <small>Upload .proto file for message validation</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="payload">Payload (JSON)</label>
+                    <textarea id="payload" name="payload">{"event":"PLAYER_MOVE","x":100,"y":200}</textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="virtualUsers">Virtual Users (Connections)</label>
+                    <input type="number" id="virtualUsers" name="virtualUsers" value="100" min="1">
+                </div>
+                
+                <div class="form-group">
+                    <label for="messagesPerSecond">Messages per Second</label>
+                    <input type="number" id="messagesPerSecond" name="messagesPerSecond" value="1000" min="1">
+                </div>
+                
+                <div class="form-group">
+                    <label for="duration">Duration</label>
+                    <input type="text" id="duration" name="duration" value="30s" placeholder="e.g., 30s, 5m, 2h">
+                </div>
+                
+                <div class="form-group">
+                    <label for="rampUpTime">Ramp-up Time</label>
+                    <input type="text" id="rampUpTime" name="rampUpTime" value="5s" placeholder="e.g., 5s, 10s">
+                </div>
+                
+                <div class="form-group">
+                    <label for="headers">Headers (JSON)</label>
+                    <textarea id="headers" name="headers">{}</textarea>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" id="createTestBtn">Create Test</button>
+                    <button type="button" id="runTestBtn" class="btn-secondary" disabled>Create and Run Test</button>
+                </div>
+            </form>
+        </div>
+        
+        <div id="dashboard-tab" class="tab-content">
+            <h2>Dashboard</h2>
+            <div class="live-metrics" id="liveMetrics">
+                <!-- Metrics will be populated here -->
+            </div>
+            
+            <div class="test-list" id="testList">
+                <!-- Test items will be populated here -->
+            </div>
+        </div>
+        
+        <div id="reports-tab" class="tab-content">
+            <h2>Reports</h2>
+            <div id="reportsList">
+                <!-- Reports will be populated here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Tab switching functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const tabs = document.querySelectorAll('.tab');
+            const tabContents = document.querySelectorAll('.tab-content');
+            
+            tabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    // Remove active class from all tabs and contents
+                    tabs.forEach(t => t.classList.remove('active'));
+                    tabContents.forEach(c => c.classList.remove('active'));
+                    
+                    // Add active class to clicked tab
+                    tab.classList.add('active');
+                    
+                    // Show corresponding tab content
+                    const tabId = tab.getAttribute('data-tab') + '-tab';
+                    document.getElementById(tabId).classList.add('active');
+                });
+            });
+            
+            // Form submission
+            const testForm = document.getElementById('testForm');
+            const createTestBtn = document.getElementById('createTestBtn');
+            const runTestBtn = document.getElementById('runTestBtn');
+            
+            testForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                createTest();
+            });
+            
+            runTestBtn.addEventListener('click', function() {
+                // This would be implemented to create and immediately run a test
+                alert('Create and run test functionality would be implemented here');
+            });
+            
+            // Load initial data
+            loadDashboard();
+        });
+        
+        function createTest() {
+            const formData = new FormData(testForm);
+            const testData = {};
+            
+            formData.forEach((value, key) => {
+                testData[key] = value;
+            });
+            
+            // Convert numeric fields
+            testData.virtualUsers = parseInt(testData.virtualUsers) || 0;
+            testData.messagesPerSecond = parseInt(testData.messagesPerSecond) || 0;
+            
+            // Send to API
+            fetch('/api/tests', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(testData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert('Test created successfully!');
+                testForm.reset();
+                // Set default values
+                document.getElementById('wsEndpoint').value = 'ws://localhost:8080/ws';
+                document.getElementById('authToken').value = 'test-token';
+                document.getElementById('eventType').value = 'PLAYER_MOVE';
+                document.getElementById('payload').value = '{"event":"PLAYER_MOVE","x":100,"y":200}';
+                document.getElementById('virtualUsers').value = 100;
+                document.getElementById('messagesPerSecond').value = 1000;
+                document.getElementById('duration').value = '30s';
+                document.getElementById('rampUpTime').value = '5s';
+                document.getElementById('headers').value = '{}';
+                
+                // Refresh dashboard
+                loadDashboard();
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error creating test');
+            });
+        }
+        
+        function loadDashboard() {
+            // Load test list
+            fetch('/api/tests')
+                .then(response => response.json())
+                .then(tests => {
+                    const testList = document.getElementById('testList');
+                    if (tests.length === 0) {
+                        testList.innerHTML = '<p>No tests found. Create a test to get started.</p>';
+                        return;
+                    }
+                    
+                    testList.innerHTML = tests.map(test => `
+                        <div class="test-item">
+                            <div class="test-item-header">
+                                <div class="test-item-title">${test.name}</div>
+                                <div class="test-item-status status-${test.status.toLowerCase()}">${test.status}</div>
+                            </div>
+                            <div class="test-item-details">
+                                <div class="test-item-detail">
+                                    <span class="test-item-detail-label">Created:</span>
+                                    <span>${new Date(test.created_at).toLocaleString()}</span>
+                                </div>
+                                <div class="test-item-detail">
+                                    <span class="test-item-detail-label">Virtual Users:</span>
+                                    <span>${test.config_json ? JSON.parse(test.config_json).virtualUsers || 'N/A' : 'N/A'}</span>
+                                </div>
+                                <div class="test-item-detail">
+                                    <span class="test-item-detail-label">Messages/sec:</span>
+                                    <span>${test.config_json ? JSON.parse(test.config_json).messagesPerSecond || 'N/A' : 'N/A'}</span>
+                                </div>
+                                <div class="test-item-detail">
+                                    <span class="test-item-detail-label">Duration:</span>
+                                    <span>${test.config_json ? JSON.parse(test.config_json).duration || 'N/A' : 'N/A'}</span>
+                                </div>
+                            </div>
+                            <div class="test-actions">
+                                ${test.status === 'QUEUED' ? `
+                                    <button onclick="startTest('${test.id}')" class="btn-success">Start</button>
+                                ` : ''}
+                                ${test.status === 'RUNNING' ? `
+                                    <button onclick="stopTest('${test.id}')" class="btn-danger">Stop</button>
+                                ` : ''}
+                                ${test.status === 'COMPLETED' ? `
+                                    <a href="/api/tests/${test.id}/report" class="report-link" target="_blank">View Report</a>
+                                ` : ''}
+                            </div>
+                        </div>
+                    `).join('');
+                })
+                .catch(error => {
+                    console.error('Error loading tests:', error);
+                    document.getElementById('testList').innerHTML = '<p>Error loading tests</p>';
+                });
+                
+            // Load live metrics (placeholder)
+            document.getElementById('liveMetrics').innerHTML = `
+                <div class="metric-card">
+                    <div class="metric-label">Active Connections</div>
+                    <div class="metric-value" id="activeConnections">0</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Messages/Second</div>
+                    <div class="metric-value" id="messagesPerSecond">0</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Error Rate</div>
+                    <div class="metric-value" id="errorRate">0%</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Avg Latency (ms)</div>
+                    <div class="metric-value" id="avgLatency">0</div>
+                </div>
+            `;
+            
+            // In a real implementation, we would periodically update these metrics
+            // from a WebSocket connection or polling endpoint
+        }
+        
+        function startTest(testId) {
+            fetch(`/api/tests/${testId}/start`, {
+                method: 'POST'
+            })
+            .then(response => {
+                if (response.ok) {
+                    alert('Test started');
+                    loadDashboard();
+                } else {
+                    return response.text().then(text => { throw new Error(text); });
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error starting test: ' + error.message);
+            });
+        }
+        
+        function stopTest(testId) {
+            fetch(`/api/tests/${testId}/stop`, {
+                method: 'POST'
+            })
+            .then(response => {
+                if (response.ok) {
+                    alert('Test stopped');
+                    loadDashboard();
+                } else {
+                    return response.text().then(text => { throw new Error(text); });
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error stopping test: ' + error.message);
+            });
+        }
+    </script>
+</body>
+</html>
