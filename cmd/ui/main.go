@@ -12,14 +12,9 @@ var uiFS embed.FS
 func main() {
 	// Create file server for UI assets
 	uiHandler := http.FileServer(http.FS(uiFS))
-	
-	// Handle root path
+
+	// Handle all paths by serving from embedded filesystem
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/" {
-			http.ServeFile(w, r, "ui/index.html")
-			return
-		}
-		// For all other paths, serve from embedded filesystem
 		uiHandler.ServeHTTP(w, r)
 	})
 

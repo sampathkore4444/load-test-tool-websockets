@@ -21,9 +21,21 @@ func main() {
 
 	// Set up HTTP server
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/tests", handler.HandleTests)
-	mux.HandleFunc("/api/tests/", handler.HandleTestByID) // For GET and DELETE on specific test
-	mux.HandleFunc("/api/tests/", handler.HandleTestActions) // For POST to /{id}/start and /{id}/stop
+	mux.HandleFunc("/api/tests", handler.HandleTests) // GET list, POST create
+	mux.HandleFunc("/api/tests/", func(w http.ResponseWriter, r *http.Request) {
+		// Handle individual test operations: GET, DELETE, and POST for start/stop
+		switch r.Method {
+		case http.MethodGet:
+			handler.HandleTestByID(w, r)
+		case http.MethodDelete:
+			handler.HandleTestByID(w, r)
+		case http.MethodPost:
+			// For start/stop actions, delegate to HandleTestActions
+			handler.HandleTestActions(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
 
 	server := &http.Server{
 		Addr:    ":8080",

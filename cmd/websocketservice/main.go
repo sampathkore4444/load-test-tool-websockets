@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"os/signal"
@@ -157,11 +159,38 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 // processMessage simulates processing a protobuf message by calling gRPC services.
 // In a real implementation, this would make actual gRPC calls.
 func processMessage(msg []byte) ([]byte, error) {
-	// Simulate some processing time
-	time.Sleep(10 * time.Millisecond)
+	// Simulate some processing time (variable to simulate different gRPC methods)
+	processingTime := time.Duration(5+rand.Intn(15)) * time.Millisecond
+	time.Sleep(processingTime)
 
-	// For demonstration, we'll just echo back a modified message
-	// In a real app, this would parse the protobuf, make gRPC calls, and format a response
-	response := []byte(`{"event":"PLAYER_MOVE_ACK","timestamp":"` + time.Now().Format(time.RFC3339) + `"}`)
+	// Simulate different gRPC responses based on the message content
+	// In a real implementation, we would parse the protobuf message and route to appropriate gRPC method
+	var response []byte
+
+	// Simple simulation: if we can unmarshal as JSON, check for event type
+	var msgMap map[string]interface{}
+	if err := json.Unmarshal(msg, &msgMap); err == nil {
+		if eventType, ok := msgMap["event"].(string); ok {
+			switch eventType {
+			case "PLAYER_MOVE":
+				response = []byte(`{"event":"PLAYER_MOVE_ACK","timestamp":"` + time.Now().Format(time.RFC3339) + `","status":"success"}`)
+			case "PLAYER_SHOOT":
+				response = []byte(`{"event":"PLAYER_SHOOT_ACK","timestamp":"` + time.Now().Format(time.RFC3339) + `","hit":true,"damage":25}`)
+			case "PLAYER_CHAT":
+				response = []byte(`{"event":"PLAYER_CHAT_ACK","timestamp":"` + time.Now().Format(time.RFC3339) + `","messageId":"msg_` + fmt.Sprintf("%d", time.Now().UnixNano()) + `"}`)
+			default:
+				// Generic ACK for unknown events
+				response = []byte(`{"event":"` + eventType + `_ACK","timestamp":"` + time.Now().Format(time.RFC3339) + `"}`)
+			}
+		} else {
+			// If no event field, just echo with timestamp
+			response = []byte(`{"echo":` + string(msg) + `,"timestamp":"` + time.Now().Format(time.RFC3339) + `"}`)
+		}
+	} else {
+		// If not JSON, treat as protobuf and simulate decoding/processing
+		// In reality, we would use protobuf library to decode
+		response = []byte(`{"decoded_protobuf":true,"timestamp":"` + time.Now().Format(time.RFC3339) + `","size":` + fmt.Sprintf("%d", len(msg)) + `}`)
+	}
+
 	return response, nil
 }
