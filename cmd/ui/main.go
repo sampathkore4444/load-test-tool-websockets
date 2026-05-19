@@ -6,7 +6,7 @@ import (
 	"net/http"
 )
 
-//go:embed ../../ui/*
+//go:embed ../ui/*
 var uiFS embed.FS
 
 func main() {
