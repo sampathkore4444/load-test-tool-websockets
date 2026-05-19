@@ -22,6 +22,9 @@ type LoadRunnerConfig struct {
 	Headers         http.Header   // Additional headers for WebSocket connection
 	ProtoSchemaPath string        // Path to uploaded .proto file (optional)
 	MessageType     string        // Message type to send (e.g., "PLAYER_MOVE") (optional)
+	// OpenCode-specific enhancements
+	EnableDetailedMetrics bool   // Enable detailed per-message metrics
+	MaxMessageSize      int    // Maximum message size to simulate
 }
 
 // LoadRunnerResult holds the results of a load test run.
@@ -38,6 +41,11 @@ type LoadRunnerResult struct {
 	P95LatencyMs       float64
 	StartTime          time.Time
 	EndTime            time.Time
+	// OpenCode-specific enhanced metrics
+	MessageSizes       []int    // Sizes of messages sent/received
+	ProcessingTimes    []int64  // Processing times on server side (if available)
+	ConnectionErrors   map[string]int // Errors by type
+	MessagesPerSecond  float64  // Actual messages per second achieved
 }
 
 // LoadRunner simulates WebSocket clients for load testing.
@@ -87,11 +95,19 @@ func NewLoadRunner(config LoadRunnerConfig) *LoadRunner {
 		}
 	}
 	
+	// Set default values for OpenCode-specific enhancements
+	if config.MaxMessageSize == 0 {
+		config.MaxMessageSize = 4096 // Default 4KB
+	}
+	
 	return &LoadRunner{
 		config: config,
 		result: LoadRunnerResult{
 			StartTime: time.Now(),
 			MinLatencyMs: 1e9, // Large initial value
+			MessageSizes:    make([]int, 0, 1000),
+			ProcessingTimes: make([]int64, 0, 1000),
+			ConnectionErrors: make(map[string]int),
 		},
 		ctx:    ctx,
 		cancel: cancel,
@@ -126,6 +142,12 @@ func (lr *LoadRunner) Run() LoadRunnerResult {
 	// Wait for all workers to finish
 	lr.wg.Wait()
 	lr.result.EndTime = time.Now()
+
+	// Calculate actual messages per second
+	duration := lr.result.EndTime.Sub(lr.result.StartTime)
+	if duration > 0 {
+		lr.result.MessagesPerSecond = float64(lr.result.TotalMessagesSent) / duration.Seconds()
+	}
 
 	// Calculate latency statistics
 	if len(lr.latencies) > 0 {
@@ -200,6 +222,11 @@ func (lr *LoadRunner) connectionWorker(id int, mpsPerConn int) {
 				return
 			}
 			
+			// Record message size
+			lr.mu.Lock()
+			lr.result.MessageSizes = append(lr.result.MessageSizes, len(msg))
+			lr.mu.Unlock()
+			
 			// Decode message if decoder is available (for logging/metrics)
 			if lr.protoDecoder != nil {
 				decodedMsg, err := lr.protoDecoder(msg)
@@ -238,6 +265,11 @@ func (lr *LoadRunner) connectionWorker(id int, mpsPerConn int) {
 				lr.mu.Unlock()
 				return
 			}
+			
+			// Record message size
+			lr.mu.Lock()
+			lr.result.MessageSizes = append(lr.result.MessageSizes, len(lr.config.Payload))
+			lr.mu.Unlock()
 			
 			err = conn.WriteMessage(websocket.BinaryMessage, encodedPayload)
 			if err != nil {

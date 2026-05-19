@@ -24,6 +24,12 @@ type TestRun struct {
 	// Protobuf schema handling
 	ProtoSchemaPath string `json:"proto_schema_path,omitempty"` // Path to uploaded .proto file
 	MessageType     string `json:"message_type,omitempty"`      // Message type to send (e.g., "PLAYER_MOVE")
+	// OpenCode-specific fields
+	GitCommit       string   `json:"git_commit,omitempty"`        // Link test to specific code version
+	AISuggested     bool     `json:"ai_suggested,omitempty"`      // Flag tests initiated by AI
+	PerformanceBaseline float64 `json:"performance_baseline,omitempty"` // Reference for regression detection
+	CodePathsAffected []string `json:"code_paths_affected,omitempty"` // Files modified in this test session
+	OpenContextSummary string `json:"opencontext_summary,omitempty"` // Summary of OpenCode session context
 }
 
 // TestStore defines the interface for storing test runs.

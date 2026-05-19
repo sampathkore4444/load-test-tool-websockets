@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -154,6 +156,25 @@ func (h *Handler) handleCreateTest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	testRun.ConfigJSON = configJSON
+
+	// Set OpenCode-specific fields
+	testRun.GitCommit = r.FormValue("git_commit")
+	if ais := r.FormValue("ai_suggested"); ais != "" {
+		testRun.AISuggested = ais == "true"
+	}
+	if pb := r.FormValue("performance_baseline"); pb != "" {
+		if parsed, err := strconv.ParseFloat(pb, 64); err == nil {
+			testRun.PerformanceBaseline = parsed
+		}
+	}
+	if cpa := r.FormValue("code_paths_affected"); cpa != "" {
+		// Parse JSON array
+		if err := json.Unmarshal([]byte(cpa), &testRun.CodePathsAffected); err != nil {
+			// If not valid JSON, treat as comma-separated list
+			testRun.CodePathsAffected = strings.Split(cpa, ",")
+		}
+	}
+	testRun.OpenContextSummary = r.FormValue("opencontext_summary")
 
 	if err := h.store.CreateTestRun(&testRun); err != nil {
 		http.Error(w, "failed to create test", http.StatusInternalServerError)
