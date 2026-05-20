@@ -1,21 +1,17 @@
 package main
 
 import (
-	"embed"
 	"log"
 	"net/http"
 )
 
-//go:embed ../ui/*
-var uiFS embed.FS
+//go:embed ../../ui/index.html
+var indexHTML []byte
 
 func main() {
-	// Create file server for UI assets
-	uiHandler := http.FileServer(http.FS(uiFS))
-
-	// Handle all paths by serving from embedded filesystem
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		uiHandler.ServeHTTP(w, r)
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write(indexHTML)
 	})
 
 	log.Println("Starting UI server on :8081")
