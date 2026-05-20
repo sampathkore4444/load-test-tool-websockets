@@ -11,7 +11,7 @@ import (
 type TestRunResponse struct {
 	ID   string `json:"testId"`
 	Status string `json:"status"`
-}
+}	
 
 type TestRun struct {
 	ID       string    `json:"id"`
