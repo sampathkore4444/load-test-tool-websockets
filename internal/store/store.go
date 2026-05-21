@@ -78,7 +78,7 @@ func (s *InMemoryTestStore) GetTestRun(id string) (*TestRun, error) {
 	if testRun, exists := s.tests[id]; exists {
 		return testRun, nil
 	}
-	return nil, errors.New("test run not found")
+	return nil, ErrNotFound
 }
 
 // ListTestRuns returns all test runs.
@@ -99,7 +99,7 @@ func (s *InMemoryTestStore) UpdateTestRun(testRun *TestRun) error {
 	defer s.mu.Unlock()
 
 	if _, exists := s.tests[testRun.ID]; !exists {
-		return errors.New("test run not found")
+		return ErrNotFound
 	}
 	s.tests[testRun.ID] = testRun
 	return nil
@@ -111,7 +111,7 @@ func (s *InMemoryTestStore) DeleteTestRun(id string) error {
 	defer s.mu.Unlock()
 
 	if _, exists := s.tests[id]; !exists {
-		return errors.New("test run not found")
+		return ErrNotFound
 	}
 	delete(s.tests, id)
 	return nil

@@ -345,14 +345,14 @@ func (h *Handler) handleStartTest(w http.ResponseWriter, r *http.Request, id str
 		}
 	}()
 
-		// Return the updated test run immediately
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(testRun)
-	}
- 
- // handleStopTest stops a test run (changes status to CANCELLED or COMPLETED).
- // For simplicity, we'll set to CANCELLED when stopped manually.
- func (h *Handler) handleStopTest(w http.ResponseWriter, r *http.Request, id string) {
+	// Return the updated test run immediately
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(testRun)
+}
+
+// handleStopTest stops a test run (changes status to CANCELLED or COMPLETED).
+// For simplicity, we'll set to CANCELLED when stopped manually.
+func (h *Handler) handleStopTest(w http.ResponseWriter, r *http.Request, id string) {
  	testRun, err := h.store.GetTestRun(id)
  	if err != nil {
  		if err == store.ErrNotFound {
